@@ -9,7 +9,10 @@ import {
   INTEGRATION_SETTING_KEYS,
   readDecryptedIntegrationSetting
 } from "../integrations/integrationCredentials.js";
-import { normalizeOlistBaseUrl } from "../integrations/olist/olistUrl.js";
+import {
+  normalizeOlistBaseUrl,
+  OLIST_TINY_V3_ORDERS_LIST_PATH
+} from "../integrations/olist/olistUrl.js";
 
 const upsertSettingsSchema = z.object({
   openaiApiKey: z.string().optional(),
@@ -158,7 +161,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
 
       try {
-        await axios.get(`${normalized.baseUrl}/orders`, {
+        await axios.get(`${normalized.baseUrl}${OLIST_TINY_V3_ORDERS_LIST_PATH}`, {
           headers: { Authorization: `Bearer ${apiToken}` },
           timeout: 10000
         });

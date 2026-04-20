@@ -6,7 +6,7 @@ import {
   readDecryptedIntegrationSetting
 } from "../integrationCredentials.js";
 import { assertOlistRemoteCallAllowed, runOlistOrderSync } from "./olistSyncService.js";
-import { normalizeOlistBaseUrl } from "./olistUrl.js";
+import { normalizeOlistBaseUrl, OLIST_TINY_V3_ORDERS_LIST_PATH } from "./olistUrl.js";
 
 const syncBodySchema = z
   .object({
@@ -103,7 +103,9 @@ export async function olistRoutes(app: FastifyInstance) {
     } catch (error) {
       const code = (error as { code?: string }).code;
       if (code === "ERR_INVALID_URL") {
-        return { message: "OLIST URL invalida (nao foi possivel montar a URL absoluta para /orders)." };
+        return {
+          message: `OLIST URL invalida (nao foi possivel montar a URL absoluta para ${OLIST_TINY_V3_ORDERS_LIST_PATH}).`
+        };
       }
       const msg = error instanceof Error ? error.message : "Erro desconhecido na sincronizacao.";
       return { message: msg };

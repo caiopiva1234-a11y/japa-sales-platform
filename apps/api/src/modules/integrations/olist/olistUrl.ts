@@ -1,3 +1,6 @@
+/** Lista de pedidos na API v3 do ERP Olist/Tiny (OpenAPI oficial: GET /pedidos). */
+export const OLIST_TINY_V3_ORDERS_LIST_PATH = "/pedidos";
+
 export function normalizeOlistBaseUrl(raw: string) {
   const trimmed = raw.trim();
   if (!trimmed) return { ok: false as const, message: "URL vazia." };
@@ -10,7 +13,7 @@ export function normalizeOlistBaseUrl(raw: string) {
       return { ok: false as const, message: "URL precisa comecar com http:// ou https://." };
     }
 
-    // Remove trailing slash for composicao consistente com "/orders"
+    // Remove trailing slash for composicao consistente com OLIST_TINY_V3_ORDERS_LIST_PATH
     const normalized = `${url.origin}${url.pathname.replace(/\/$/, "")}`;
     return { ok: true as const, baseUrl: normalized };
   } catch {

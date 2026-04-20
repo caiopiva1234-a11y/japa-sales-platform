@@ -207,7 +207,7 @@ export default function SettingsPage() {
             className="input"
             value={form.olistApiBaseUrl}
             onChange={(event) => setForm((prev) => ({ ...prev, olistApiBaseUrl: event.target.value }))}
-            placeholder="https://..."
+            placeholder="https://api.tiny.com.br/public-api/v3"
           />
         </label>
         <label>
