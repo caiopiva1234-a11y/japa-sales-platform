@@ -1,0 +1,14 @@
+{
+  "name": "japa-sales-platform",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace @japa/api",
+    "dev:web": "npm run dev --workspace @japa/web",
+    "build": "npm run build --workspace @japa/api && npm run build --workspace @japa/web"
+  }
+}

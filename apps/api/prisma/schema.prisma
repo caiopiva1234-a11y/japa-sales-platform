@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("commercial")
+  createdAt    DateTime @default(now())
+}
+
+model Customer {
+  id          String   @id @default(cuid())
+  externalId  String?  @unique
+  name        String
+  phone       String?
+  city        String?
+  segment     String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  orders      Order[]
+  metrics     CustomerItemMetric[]
+  conversations Conversation[]
+  leads       Lead[]   @relation("ConvertedLead")
+}
+
+model Product {
+  id         String   @id @default(cuid())
+  sku        String   @unique
+  name       String
+  category   String?
+  margin     Float?
+  createdAt  DateTime @default(now())
+  orderItems OrderItem[]
+  metrics    CustomerItemMetric[]
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  externalId  String?     @unique
+  customerId  String
+  totalValue  Float
+  orderDate   DateTime
+  status      String
+  createdAt   DateTime    @default(now())
+  customer    Customer    @relation(fields: [customerId], references: [id])
+  items       OrderItem[]
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  productId  String
+  quantity   Int
+  unitPrice  Float
+  totalPrice Float
+  order      Order    @relation(fields: [orderId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id])
+
+  @@unique([orderId, productId])
+}
+
+model CustomerItemMetric {
+  id                 String   @id @default(cuid())
+  customerId         String
+  productId          String
+  averageQuantity    Float
+  frequencyDays      Float
+  daysWithoutBuying  Int
+  repurchaseScore    Float
+  suggestedQuantity  Int
+  possibleForget     Boolean  @default(false)
+  lastPurchaseAt     DateTime?
+  updatedAt          DateTime @updatedAt
+  customer           Customer @relation(fields: [customerId], references: [id])
+  product            Product  @relation(fields: [productId], references: [id])
+
+  @@unique([customerId, productId])
+}
+
+model CrossSellRule {
+  id            String  @id @default(cuid())
+  baseProductId String
+  suggestedId   String
+  confidence    Float
+  support       Float
+  createdAt     DateTime @default(now())
+}
+
+model Conversation {
+  id          String   @id @default(cuid())
+  customerId  String
+  channel     String   @default("whatsapp")
+  status      String   @default("open")
+  assignedUserId String?
+  priority    String   @default("normal")
+  lastMessageAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  customer    Customer @relation(fields: [customerId], references: [id])
+  messages    Message[]
+  analysis    ConversationAnalysis?
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  direction      String
+  content        String
+  templateKey    String?
+  status         String   @default("sent")
+  externalId     String?
+  createdAt      DateTime @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+}
+
+model ConversationAnalysis {
+  id             String   @id @default(cuid())
+  conversationId String   @unique
+  result         String
+  qualityScore   Int
+  reasons        Json
+  suggestions    Json
+  analyzedAt     DateTime @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+}
+
+model AutomationRun {
+  id         String   @id @default(cuid())
+  ruleName   String
+  status     String
+  details    String?
+  createdAt  DateTime @default(now())
+}
+
+model OutreachTask {
+  id            String   @id @default(cuid())
+  customerId    String?
+  leadId        String?
+  lane          String
+  priority      Int      @default(0)
+  reason        String
+  suggestedText String?
+  dueAt         DateTime
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+}
+
+model Lead {
+  id               String   @id @default(cuid())
+  name             String
+  phone            String?
+  source           String
+  stage            String   @default("new")
+  score            Int      @default(0)
+  assignedTo       String?
+  convertedCustomerId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  convertedCustomer Customer? @relation("ConvertedLead", fields: [convertedCustomerId], references: [id])
+}
