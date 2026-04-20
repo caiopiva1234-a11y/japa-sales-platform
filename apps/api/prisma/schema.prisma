@@ -24,6 +24,9 @@ model Customer {
   phone       String?
   city        String?
   segment     String?
+  notes       String?
+  nextFollowUpAt DateTime?
+  lastActivityAt DateTime?
   status      String   @default("active")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -152,6 +155,7 @@ model OutreachTask {
   suggestedText String?
   dueAt         DateTime
   status        String   @default("pending")
+  completedAt   DateTime?
   createdAt     DateTime @default(now())
 }
 
@@ -162,6 +166,9 @@ model Lead {
   source           String
   stage            String   @default("new")
   score            Int      @default(0)
+  notes            String?
+  nextFollowUpAt   DateTime?
+  lastActivityAt   DateTime?
   assignedTo       String?
   convertedCustomerId String?
   createdAt        DateTime @default(now())

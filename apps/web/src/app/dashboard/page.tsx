@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../lib/api";
 
+const WHATSAPP_UI_ENABLED = process.env.NEXT_PUBLIC_ENABLE_WHATSAPP === "true";
+
 type Kpis = {
   totalCustomers: number;
   monthlyRevenue: number;
@@ -65,9 +67,8 @@ export default function DashboardPage() {
   );
 
   async function loadData() {
-    const [kpiData, convData, retentionKpis, tasks] = await Promise.all([
+    const [kpiData, retentionKpis, tasks] = await Promise.all([
       apiFetch<Kpis>("/dashboard/kpis"),
-      apiFetch<Conversation[]>("/conversations"),
       apiFetch<{
         tasksByLane: Record<string, number>;
         activeLeads: number;
@@ -80,9 +81,19 @@ export default function DashboardPage() {
       )
     ]);
     setKpis(kpiData);
-    setConversations(convData);
     setRetentionData(retentionKpis);
     setOutreachTasks(tasks);
+
+    if (!WHATSAPP_UI_ENABLED) {
+      setConversations([]);
+      setMessages([]);
+      setRecommendations(null);
+      setSelectedConversation("");
+      return;
+    }
+
+    const convData = await apiFetch<Conversation[]>("/conversations");
+    setConversations(convData);
     if (convData.length && !selectedConversation) {
       await onSelectConversation(convData[0].id, convData[0].customer.id);
     }
@@ -141,8 +152,14 @@ export default function DashboardPage() {
         <h2>Painel Comercial - Japa Atacado</h2>
         <p>Recompra, atendimento e automacoes em uma unica plataforma.</p>
         <p>
-          <a href="/settings">Ir para Configuracoes de Integracoes</a>
+          <a href="/crm">Abrir CRM</a> · <a href="/settings">Configuracoes</a>
         </p>
+        {!WHATSAPP_UI_ENABLED ? (
+          <p className="muted" style={{ marginBottom: 0 }}>
+            WhatsApp pausado neste ambiente. Para reativar a UI, defina{" "}
+            <code>NEXT_PUBLIC_ENABLE_WHATSAPP=true</code> no build do web.
+          </p>
+        ) : null}
       </header>
 
       <section className="grid grid-3">
@@ -155,7 +172,7 @@ export default function DashboardPage() {
           <p>R$ {(kpis?.monthlyRevenue ?? 0).toFixed(2)}</p>
         </div>
         <div className="card">
-          <strong>Taxa de sucesso WhatsApp</strong>
+          <strong>{WHATSAPP_UI_ENABLED ? "Taxa de sucesso WhatsApp" : "Taxa de sucesso (abordagens)"}</strong>
           <p>{(kpis?.whatsappSuccessRate ?? 0).toFixed(1)}%</p>
         </div>
       </section>
@@ -182,91 +199,116 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid" style={{ gridTemplateColumns: "320px 1fr 320px" }}>
-        <aside className="card">
-          <h3>Tenda de atendimento</h3>
-          <div className="grid">
-            {conversations.map((conversation) => (
-              <button
-                key={conversation.id}
-                className="btn"
-                style={{
-                  textAlign: "left",
-                  background: selectedConversation === conversation.id ? "#dbeafe" : "#f8fafc"
-                }}
-                onClick={() => onSelectConversation(conversation.id, conversation.customer.id)}
-              >
-                <strong>{conversation.customer.name}</strong>
-                <div style={{ fontSize: 12 }}>
-                  {conversation.messages[0]?.content ?? "Sem mensagens."}
-                </div>
-              </button>
-            ))}
-          </div>
-        </aside>
+      <section
+        className="grid"
+        style={{ gridTemplateColumns: WHATSAPP_UI_ENABLED ? "320px 1fr 320px" : "1fr 360px" }}
+      >
+        {WHATSAPP_UI_ENABLED ? (
+          <>
+            <aside className="card">
+              <h3>Tenda de atendimento</h3>
+              <div className="grid">
+                {conversations.map((conversation) => (
+                  <button
+                    key={conversation.id}
+                    className="btn"
+                    style={{
+                      textAlign: "left",
+                      background: selectedConversation === conversation.id ? "#dbeafe" : "#f8fafc"
+                    }}
+                    onClick={() => onSelectConversation(conversation.id, conversation.customer.id)}
+                  >
+                    <strong>{conversation.customer.name}</strong>
+                    <div style={{ fontSize: 12 }}>
+                      {conversation.messages[0]?.content ?? "Sem mensagens."}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </aside>
 
-        <div className="card">
-          <h3>Conversa</h3>
-          <div style={{ minHeight: 320, maxHeight: 420, overflow: "auto" }}>
-            {messages.map((message) => (
-              <p
-                key={message.id}
-                style={{
-                  textAlign: message.direction === "outbound" ? "right" : "left",
-                  margin: "8px 0"
-                }}
-              >
-                <span
-                  style={{
-                    background: message.direction === "outbound" ? "#bfdbfe" : "#e2e8f0",
-                    borderRadius: 8,
-                    padding: "6px 10px",
-                    display: "inline-block"
-                  }}
+            <div className="card">
+              <h3>Conversa</h3>
+              <div style={{ minHeight: 320, maxHeight: 420, overflow: "auto" }}>
+                {messages.map((message) => (
+                  <p
+                    key={message.id}
+                    style={{
+                      textAlign: message.direction === "outbound" ? "right" : "left",
+                      margin: "8px 0"
+                    }}
+                  >
+                    <span
+                      style={{
+                        background: message.direction === "outbound" ? "#bfdbfe" : "#e2e8f0",
+                        borderRadius: 8,
+                        padding: "6px 10px",
+                        display: "inline-block"
+                      }}
+                    >
+                      {message.content}
+                    </span>
+                  </p>
+                ))}
+              </div>
+              <div className="grid" style={{ gridTemplateColumns: "220px 1fr auto auto" }}>
+                <select
+                  className="input"
+                  value={templateKey}
+                  onChange={(event) => setTemplateKey(event.target.value)}
                 >
-                  {message.content}
-                </span>
-              </p>
-            ))}
-          </div>
-          <div className="grid" style={{ gridTemplateColumns: "220px 1fr auto auto" }}>
-            <select
-              className="input"
-              value={templateKey}
-              onChange={(event) => setTemplateKey(event.target.value)}
-            >
-              <option value="recompra_padrao">Template recompra padrao</option>
-              <option value="reativacao_30d">Template reativacao 30d</option>
-              <option value="captacao_primeiro_contato">Template captacao inicial</option>
-            </select>
-            <input
-              className="input"
-              placeholder="Digite a mensagem..."
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-            />
-            <button className="btn btn-primary" onClick={sendMessage}>
-              Enviar
-            </button>
-            <button className="btn" onClick={runAnalysis}>
-              Analise IA
-            </button>
-          </div>
-          <div className="grid" style={{ gridTemplateColumns: "repeat(4, auto)", marginTop: 10 }}>
-            <button className="btn" onClick={() => markOutcome("sucesso")}>
-              Marcar sucesso
-            </button>
-            <button className="btn" onClick={() => markOutcome("pendente")}>
-              Marcar pendente
-            </button>
-            <button className="btn" onClick={() => markOutcome("sem_sucesso")}>
-              Marcar sem sucesso
-            </button>
-            <button className="btn" onClick={() => markOutcome("sem_resposta")}>
-              Sem resposta
-            </button>
-          </div>
-        </div>
+                  <option value="recompra_padrao">Template recompra padrao</option>
+                  <option value="reativacao_30d">Template reativacao 30d</option>
+                  <option value="captacao_primeiro_contato">Template captacao inicial</option>
+                </select>
+                <input
+                  className="input"
+                  placeholder="Digite a mensagem..."
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                />
+                <button className="btn btn-primary" onClick={sendMessage}>
+                  Enviar
+                </button>
+                <button className="btn" onClick={runAnalysis}>
+                  Analise IA
+                </button>
+              </div>
+              <div className="grid" style={{ gridTemplateColumns: "repeat(4, auto)", marginTop: 10 }}>
+                <button className="btn" onClick={() => markOutcome("sucesso")}>
+                  Marcar sucesso
+                </button>
+                <button className="btn" onClick={() => markOutcome("pendente")}>
+                  Marcar pendente
+                </button>
+                <button className="btn" onClick={() => markOutcome("sem_sucesso")}>
+                  Marcar sem sucesso
+                </button>
+                <button className="btn" onClick={() => markOutcome("sem_resposta")}>
+                  Sem resposta
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <section className="card grid">
+            <h3 style={{ margin: 0 }}>Operacao comercial (sem WhatsApp)</h3>
+            <p className="muted" style={{ margin: 0 }}>
+              Use o CRM para organizar follow-ups, leads e tarefas. O painel continua mostrando KPIs e esteiras.
+            </p>
+            <div className="row">
+              <a className="btn btn-primary" href="/crm/tasks">
+                Ver tarefas
+              </a>
+              <a className="btn" href="/crm/leads">
+                Ver leads
+              </a>
+              <a className="btn" href="/crm/customers">
+                Ver clientes (CRM)
+              </a>
+            </div>
+          </section>
+        )}
 
         <aside className="card">
           <h3>Sugestao de venda</h3>
@@ -274,15 +316,21 @@ export default function DashboardPage() {
             Itens de recompra com chance de esquecimento e sugestoes de cross-sell.
           </p>
           <div className="grid">
-            {recommendations?.repurchaseList?.slice(0, 8).map((item) => (
-              <div key={`${item.productName}-${item.repurchaseScore}`}>
-                <strong>{item.productName}</strong>
-                <div style={{ fontSize: 12 }}>
-                  Sugerir {item.suggestedQuantity} un. | Score {item.repurchaseScore.toFixed(0)}
-                  {item.possibleForget ? " | Esquecimento" : ""}
+            {WHATSAPP_UI_ENABLED ? (
+              recommendations?.repurchaseList?.slice(0, 8).map((item) => (
+                <div key={`${item.productName}-${item.repurchaseScore}`}>
+                  <strong>{item.productName}</strong>
+                  <div style={{ fontSize: 12 }}>
+                    Sugerir {item.suggestedQuantity} un. | Score {item.repurchaseScore.toFixed(0)}
+                    {item.possibleForget ? " | Esquecimento" : ""}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="muted" style={{ margin: 0 }}>
+                As sugestoes por cliente aparecem quando o modo WhatsApp estiver ativo (conversa selecionada).
+              </p>
+            )}
           </div>
           <hr style={{ margin: "14px 0", borderColor: "#e2e8f0" }} />
           <h4>Fila de abordagem</h4>

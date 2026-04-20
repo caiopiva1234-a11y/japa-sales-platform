@@ -9,12 +9,34 @@ const createCustomerSchema = z.object({
   segment: z.string().optional()
 });
 
+const updateCustomerSchema = z.object({
+  name: z.string().min(2).optional(),
+  phone: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  segment: z.string().optional().nullable(),
+  status: z.string().optional(),
+  notes: z.string().optional().nullable(),
+  nextFollowUpAt: z.coerce.date().optional().nullable()
+});
+
 export async function clientRoutes(app: FastifyInstance) {
   app.get("/customers", async (request) => {
     await request.jwtVerify();
     return prisma.customer.findMany({
       orderBy: { updatedAt: "desc" },
       include: { orders: { take: 5, orderBy: { orderDate: "desc" } } }
+    });
+  });
+
+  app.get("/customers/:id", async (request) => {
+    await request.jwtVerify();
+    const { id } = request.params as { id: string };
+    return prisma.customer.findUnique({
+      where: { id },
+      include: {
+        orders: { orderBy: { orderDate: "desc" }, take: 20, include: { items: { include: { product: true } } } },
+        metrics: { take: 10, orderBy: { repurchaseScore: "desc" }, include: { product: true } }
+      }
     });
   });
 
@@ -32,6 +54,19 @@ export async function clientRoutes(app: FastifyInstance) {
         phone: body.phone,
         city: body.city,
         segment: body.segment
+      }
+    });
+  });
+
+  app.patch("/customers/:id", async (request) => {
+    await request.jwtVerify();
+    const { id } = request.params as { id: string };
+    const body = updateCustomerSchema.parse(request.body);
+    return prisma.customer.update({
+      where: { id },
+      data: {
+        ...body,
+        lastActivityAt: new Date()
       }
     });
   });

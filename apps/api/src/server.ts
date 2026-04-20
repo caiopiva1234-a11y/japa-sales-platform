@@ -14,7 +14,10 @@ import { dashboardRoutes } from "./modules/dashboard/routes.js";
 import { automationRoutes } from "./modules/automation/routes.js";
 import { leadRoutes } from "./modules/leads/routes.js";
 import { olistRoutes } from "./modules/integrations/olist/routes.js";
+import { registerOlistScheduler } from "./modules/integrations/olist/olistScheduler.js";
 import { settingsRoutes } from "./modules/settings/routes.js";
+import { catalogRoutes } from "./modules/catalog/routes.js";
+import { crmRoutes } from "./modules/crm/routes.js";
 
 async function bootstrap() {
   const app = Fastify({ logger: true });
@@ -38,6 +41,10 @@ async function bootstrap() {
   await app.register(leadRoutes);
   await app.register(olistRoutes);
   await app.register(settingsRoutes);
+  await app.register(catalogRoutes);
+  await app.register(crmRoutes);
+
+  registerOlistScheduler(app);
 
   const adminEmail = "admin@japaatacado.com";
   const user = await prisma.user.findUnique({ where: { email: adminEmail } });

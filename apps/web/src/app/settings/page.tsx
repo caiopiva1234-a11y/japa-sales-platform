@@ -8,6 +8,16 @@ type IntegrationSettings = {
   olistApiBaseUrl: string;
   olistApiToken: string;
   evolutionApiToken: string;
+  olistAutoSyncEnabled: boolean;
+  olistAutoSyncIntervalMinutes: number;
+  olistMinManualIntervalMinutes: number;
+};
+
+type OlistSyncResponse = {
+  message: string;
+  retryAfterSeconds?: number;
+  totalReceived?: number;
+  syncedOrders?: number;
 };
 
 export default function SettingsPage() {
@@ -15,10 +25,17 @@ export default function SettingsPage() {
     openaiApiKey: "",
     olistApiBaseUrl: "",
     olistApiToken: "",
-    evolutionApiToken: ""
+    evolutionApiToken: "",
+    olistAutoSyncEnabled: false,
+    olistAutoSyncIntervalMinutes: 120,
+    olistMinManualIntervalMinutes: 10
   });
   const [message, setMessage] = useState("");
   const [testingProvider, setTestingProvider] = useState<string>("");
+  const [importStart, setImportStart] = useState("");
+  const [importEnd, setImportEnd] = useState("");
+  const [importMonths, setImportMonths] = useState(6);
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     void load();
@@ -27,7 +44,12 @@ export default function SettingsPage() {
   async function load() {
     try {
       const data = await apiFetch<IntegrationSettings>("/settings/integrations");
-      setForm(data);
+      setForm({
+        ...data,
+        olistAutoSyncEnabled: Boolean(data.olistAutoSyncEnabled),
+        olistAutoSyncIntervalMinutes: Number(data.olistAutoSyncIntervalMinutes ?? 120),
+        olistMinManualIntervalMinutes: Number(data.olistMinManualIntervalMinutes ?? 10)
+      });
     } catch {
       setMessage("Nao foi possivel carregar configuracoes.");
     }
@@ -40,6 +62,79 @@ export default function SettingsPage() {
     });
     setMessage("Configuracoes salvas com sucesso.");
     await load();
+  }
+
+  function toUtcNoonIso(date: string) {
+    return `${date}T12:00:00.000Z`;
+  }
+
+  async function importRange() {
+    try {
+      setImporting(true);
+      if (!importStart || !importEnd) {
+        setMessage("Selecione data inicial e final para importar por periodo.");
+        return;
+      }
+      const since = new Date(toUtcNoonIso(importStart));
+      const endInclusive = new Date(toUtcNoonIso(importEnd));
+      const untilExclusive = new Date(endInclusive.getTime() + 24 * 60 * 60 * 1000);
+
+      const result = await apiFetch<OlistSyncResponse>("/integrations/olist/sync", {
+        method: "POST",
+        body: JSON.stringify({
+          since: since.toISOString(),
+          until: untilExclusive.toISOString(),
+          mode: "window"
+        })
+      });
+      setMessage(
+        result.retryAfterSeconds
+          ? result.message
+          : `${result.message} Recebidos: ${result.totalReceived ?? 0}. Importados: ${result.syncedOrders ?? 0}.`
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Falha na importacao.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function importLastMonths() {
+    try {
+      setImporting(true);
+      const result = await apiFetch<OlistSyncResponse>("/integrations/olist/sync", {
+        method: "POST",
+        body: JSON.stringify({ months: importMonths, mode: "window" })
+      });
+      setMessage(
+        result.retryAfterSeconds
+          ? result.message
+          : `${result.message} Recebidos: ${result.totalReceived ?? 0}. Importados: ${result.syncedOrders ?? 0}.`
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Falha na importacao.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function importSinceLast() {
+    try {
+      setImporting(true);
+      const result = await apiFetch<OlistSyncResponse>("/integrations/olist/sync", {
+        method: "POST",
+        body: JSON.stringify({ months: importMonths, mode: "since_last" })
+      });
+      setMessage(
+        result.retryAfterSeconds
+          ? result.message
+          : `${result.message} Recebidos: ${result.totalReceived ?? 0}. Importados: ${result.syncedOrders ?? 0}.`
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Falha na importacao.");
+    } finally {
+      setImporting(false);
+    }
   }
 
   async function testConnection(provider: "openai" | "olist" | "evolution") {
@@ -62,8 +157,8 @@ export default function SettingsPage() {
   return (
     <main className="container grid" style={{ gap: 20 }}>
       <header className="card">
-        <h2>Configuracoes de Integracoes</h2>
-        <p>Salve tokens e URLs de integracao sem expor os segredos no frontend.</p>
+        <h2>Configuracoes</h2>
+        <p>Integracoes, limites de requisicao e importacao de dados.</p>
       </header>
 
       <section className="card grid">
@@ -86,7 +181,7 @@ export default function SettingsPage() {
           </button>
         </label>
         <label>
-          OLIST API Base URL
+          OLIST/Tiny API Base URL
           <input
             className="input"
             value={form.olistApiBaseUrl}
@@ -95,7 +190,7 @@ export default function SettingsPage() {
           />
         </label>
         <label>
-          OLIST API Token
+          OLIST/Tiny API Token
           <input
             className="input"
             value={form.olistApiToken}
@@ -136,6 +231,97 @@ export default function SettingsPage() {
           </button>
         </div>
         {message ? <p>{message}</p> : null}
+      </section>
+
+      <section className="card grid">
+        <h3 style={{ margin: 0 }}>Limites e importacao automatica (OLIST/Tiny)</h3>
+        <p className="muted" style={{ margin: 0 }}>
+          Para proteger o limite de requisicoes, o servidor impoe um intervalo minimo entre chamadas remotas de
+          listagem de pedidos (importacao manual, automatica e agendada compartilham o mesmo controle).
+        </p>
+
+        <div className="grid grid-3">
+          <label>
+            Intervalo minimo entre importacoes (minutos)
+            <input
+              className="input"
+              type="number"
+              min={5}
+              value={form.olistMinManualIntervalMinutes}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, olistMinManualIntervalMinutes: Number(event.target.value) }))
+              }
+            />
+          </label>
+          <label>
+            Importacao automatica (intervalo, minutos)
+            <input
+              className="input"
+              type="number"
+              min={15}
+              value={form.olistAutoSyncIntervalMinutes}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, olistAutoSyncIntervalMinutes: Number(event.target.value) }))
+              }
+            />
+          </label>
+          <label className="row" style={{ alignItems: "center", gap: 10 }}>
+            <input
+              type="checkbox"
+              checked={form.olistAutoSyncEnabled}
+              onChange={(event) => setForm((prev) => ({ ...prev, olistAutoSyncEnabled: event.target.checked }))}
+            />
+            <span style={{ fontWeight: 700 }}>Ativar importacao automatica</span>
+          </label>
+        </div>
+
+        <div>
+          <button className="btn btn-primary" onClick={save}>
+            Salvar limites/automatico
+          </button>
+        </div>
+      </section>
+
+      <section className="card grid">
+        <h3 style={{ margin: 0 }}>Importar dados</h3>
+        <p className="muted" style={{ margin: 0 }}>
+          A importacao sempre faz uma unica chamada remota para listar pedidos e filtra no servidor (clientes e itens
+          entram junto com os pedidos).
+        </p>
+
+        <div className="grid grid-3">
+          <label>
+            Data inicial
+            <input className="input" type="date" value={importStart} onChange={(e) => setImportStart(e.target.value)} />
+          </label>
+          <label>
+            Data final
+            <input className="input" type="date" value={importEnd} onChange={(e) => setImportEnd(e.target.value)} />
+          </label>
+          <label>
+            Meses (fallback / primeira carga incremental)
+            <input
+              className="input"
+              type="number"
+              min={1}
+              max={60}
+              value={importMonths}
+              onChange={(e) => setImportMonths(Number(e.target.value))}
+            />
+          </label>
+        </div>
+
+        <div className="row">
+          <button className="btn btn-primary" type="button" disabled={importing} onClick={() => void importRange()}>
+            {importing ? "Importando..." : "Importar por periodo"}
+          </button>
+          <button className="btn" type="button" disabled={importing} onClick={() => void importLastMonths()}>
+            Importar ultimos N meses
+          </button>
+          <button className="btn" type="button" disabled={importing} onClick={() => void importSinceLast()}>
+            Importar desde a ultima importacao
+          </button>
+        </div>
       </section>
     </main>
   );

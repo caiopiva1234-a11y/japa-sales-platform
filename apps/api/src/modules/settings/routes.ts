@@ -5,20 +5,20 @@ import OpenAI from "openai";
 import { prisma } from "../../shared/prisma.js";
 import { decryptSecret, encryptSecret } from "../../shared/crypto.js";
 import { env } from "../../config/env.js";
+import {
+  INTEGRATION_SETTING_KEYS,
+  readDecryptedIntegrationSetting
+} from "../integrations/integrationCredentials.js";
 
 const upsertSettingsSchema = z.object({
   openaiApiKey: z.string().optional(),
   olistApiBaseUrl: z.string().optional(),
   olistApiToken: z.string().optional(),
-  evolutionApiToken: z.string().optional()
+  evolutionApiToken: z.string().optional(),
+  olistAutoSyncEnabled: z.boolean().optional(),
+  olistAutoSyncIntervalMinutes: z.coerce.number().int().min(15).max(24 * 60).optional(),
+  olistMinManualIntervalMinutes: z.coerce.number().int().min(5).max(24 * 60).optional()
 });
-
-const SETTINGS_KEYS = {
-  openaiApiKey: "OPENAI_API_KEY",
-  olistApiBaseUrl: "OLIST_API_BASE_URL",
-  olistApiToken: "OLIST_API_TOKEN",
-  evolutionApiToken: "EVOLUTION_API_TOKEN"
-} as const;
 
 const testSettingsSchema = z.object({
   provider: z.enum(["openai", "olist", "evolution"])
@@ -30,16 +30,6 @@ function maskValue(raw: string) {
 }
 
 export async function settingsRoutes(app: FastifyInstance) {
-  const readDecrypted = async (key: string) => {
-    const setting = await prisma.integrationSetting.findUnique({ where: { key } });
-    if (!setting) return "";
-    try {
-      return decryptSecret(setting.valueEncrypted);
-    } catch {
-      return "";
-    }
-  };
-
   app.get("/settings/integrations", async (request) => {
     const token = await request.jwtVerify<{ role?: string }>();
     if (token.role !== "admin") return { message: "Apenas admin pode acessar configuracoes." };
@@ -57,11 +47,31 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
     };
 
+    const readPlain = async (key: string) => {
+      const raw = await readDecryptedIntegrationSetting(key);
+      return raw;
+    };
+
+    const parseNumber = (raw: string, fallback: number) => {
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+      return parsed;
+    };
+
     return {
-      openaiApiKey: readMasked(SETTINGS_KEYS.openaiApiKey),
-      olistApiBaseUrl: readMasked(SETTINGS_KEYS.olistApiBaseUrl),
-      olistApiToken: readMasked(SETTINGS_KEYS.olistApiToken),
-      evolutionApiToken: readMasked(SETTINGS_KEYS.evolutionApiToken)
+      openaiApiKey: readMasked(INTEGRATION_SETTING_KEYS.openaiApiKey),
+      olistApiBaseUrl: await readPlain(INTEGRATION_SETTING_KEYS.olistApiBaseUrl),
+      olistApiToken: readMasked(INTEGRATION_SETTING_KEYS.olistApiToken),
+      evolutionApiToken: readMasked(INTEGRATION_SETTING_KEYS.evolutionApiToken),
+      olistAutoSyncEnabled: (await readPlain(INTEGRATION_SETTING_KEYS.olistAutoSyncEnabled)) === "true",
+      olistAutoSyncIntervalMinutes: parseNumber(
+        await readPlain(INTEGRATION_SETTING_KEYS.olistAutoSyncIntervalMinutes),
+        120
+      ),
+      olistMinManualIntervalMinutes: parseNumber(
+        await readPlain(INTEGRATION_SETTING_KEYS.olistMinManualIntervalMinutes),
+        10
+      )
     };
   });
 
@@ -70,16 +80,31 @@ export async function settingsRoutes(app: FastifyInstance) {
     if (token.role !== "admin") return { message: "Apenas admin pode alterar configuracoes." };
 
     const body = upsertSettingsSchema.parse(request.body);
-    const entries = Object.entries(body).filter(([, value]) => value && value.trim().length > 0);
+    const entries: Array<[keyof typeof INTEGRATION_SETTING_KEYS, string]> = [];
+
+    if (body.openaiApiKey?.trim()) entries.push(["openaiApiKey", body.openaiApiKey.trim()]);
+    if (body.olistApiBaseUrl?.trim()) entries.push(["olistApiBaseUrl", body.olistApiBaseUrl.trim()]);
+    if (body.olistApiToken?.trim()) entries.push(["olistApiToken", body.olistApiToken.trim()]);
+    if (body.evolutionApiToken?.trim()) entries.push(["evolutionApiToken", body.evolutionApiToken.trim()]);
+
+    if (body.olistAutoSyncEnabled !== undefined) {
+      entries.push(["olistAutoSyncEnabled", body.olistAutoSyncEnabled ? "true" : "false"]);
+    }
+    if (body.olistAutoSyncIntervalMinutes !== undefined) {
+      entries.push(["olistAutoSyncIntervalMinutes", String(body.olistAutoSyncIntervalMinutes)]);
+    }
+    if (body.olistMinManualIntervalMinutes !== undefined) {
+      entries.push(["olistMinManualIntervalMinutes", String(body.olistMinManualIntervalMinutes)]);
+    }
 
     await Promise.all(
       entries.map(([field, value]) =>
         prisma.integrationSetting.upsert({
-          where: { key: SETTINGS_KEYS[field as keyof typeof SETTINGS_KEYS] },
-          update: { valueEncrypted: encryptSecret(value as string) },
+          where: { key: INTEGRATION_SETTING_KEYS[field] },
+          update: { valueEncrypted: encryptSecret(value) },
           create: {
-            key: SETTINGS_KEYS[field as keyof typeof SETTINGS_KEYS],
-            valueEncrypted: encryptSecret(value as string)
+            key: INTEGRATION_SETTING_KEYS[field],
+            valueEncrypted: encryptSecret(value)
           }
         })
       )
@@ -95,7 +120,10 @@ export async function settingsRoutes(app: FastifyInstance) {
     const { provider } = testSettingsSchema.parse(request.body);
 
     if (provider === "openai") {
-      const apiKey = (await readDecrypted(SETTINGS_KEYS.openaiApiKey)) || env.OPENAI_API_KEY || "";
+      const apiKey =
+        (await readDecryptedIntegrationSetting(INTEGRATION_SETTING_KEYS.openaiApiKey)) ||
+        env.OPENAI_API_KEY ||
+        "";
       if (!apiKey) {
         return { ok: false, provider, message: "OpenAI API Key nao configurada." };
       }
@@ -105,8 +133,14 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
 
     if (provider === "olist") {
-      const baseUrl = (await readDecrypted(SETTINGS_KEYS.olistApiBaseUrl)) || env.OLIST_API_BASE_URL || "";
-      const apiToken = (await readDecrypted(SETTINGS_KEYS.olistApiToken)) || env.OLIST_API_TOKEN || "";
+      const baseUrl =
+        (await readDecryptedIntegrationSetting(INTEGRATION_SETTING_KEYS.olistApiBaseUrl)) ||
+        env.OLIST_API_BASE_URL ||
+        "";
+      const apiToken =
+        (await readDecryptedIntegrationSetting(INTEGRATION_SETTING_KEYS.olistApiToken)) ||
+        env.OLIST_API_TOKEN ||
+        "";
       if (!baseUrl || !apiToken) {
         return { ok: false, provider, message: "OLIST URL e token sao obrigatorios." };
       }
@@ -118,7 +152,9 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
 
     const evolutionToken =
-      (await readDecrypted(SETTINGS_KEYS.evolutionApiToken)) || env.EVOLUTION_API_TOKEN || "";
+      (await readDecryptedIntegrationSetting(INTEGRATION_SETTING_KEYS.evolutionApiToken)) ||
+      env.EVOLUTION_API_TOKEN ||
+      "";
     const evolutionUrl = env.EVOLUTION_API_URL || "http://evolution-api:8080";
     if (!evolutionToken) {
       return { ok: false, provider, message: "Token da Evolution nao configurado." };

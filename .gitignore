@@ -2,6 +2,11 @@ node_modules
 .next
 dist
 .env
+.env.*
 *.log
 coverage
 prisma/migrations
+
+# Prevent accidental nested repo copies inside the monorepo workspace
+japa-sales-platform/
+_backup_nested_japa-sales-platform_*/

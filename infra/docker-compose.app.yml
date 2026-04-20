@@ -29,8 +29,12 @@ services:
     build:
       context: ..
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3333}
+        NEXT_PUBLIC_ENABLE_WHATSAPP: ${NEXT_PUBLIC_ENABLE_WHATSAPP:-false}
     environment:
-      NEXT_PUBLIC_API_URL: http://api:3333
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3333}
+      NEXT_PUBLIC_ENABLE_WHATSAPP: ${NEXT_PUBLIC_ENABLE_WHATSAPP:-false}
     depends_on:
       - api
     restart: unless-stopped

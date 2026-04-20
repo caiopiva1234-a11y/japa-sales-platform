@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import dayjs from "dayjs";
+import { z } from "zod";
 import { prisma } from "../../shared/prisma.js";
 
 export async function automationRoutes(app: FastifyInstance) {
@@ -110,6 +111,30 @@ export async function automationRoutes(app: FastifyInstance) {
     return prisma.outreachTask.findMany({
       where: { status: "pending" },
       orderBy: [{ priority: "desc" }, { dueAt: "asc" }]
+    });
+  });
+
+  app.post("/automation/outreach-tasks/:id/complete", async (request) => {
+    await request.jwtVerify();
+    const { id } = request.params as { id: string };
+    return prisma.outreachTask.update({
+      where: { id },
+      data: { status: "completed", completedAt: new Date() }
+    });
+  });
+
+  app.post("/automation/outreach-tasks/:id/snooze", async (request) => {
+    await request.jwtVerify();
+    const { id } = request.params as { id: string };
+    const body = z
+      .object({
+        hours: z.coerce.number().min(1).max(24 * 14).default(24)
+      })
+      .parse(request.body ?? {});
+
+    return prisma.outreachTask.update({
+      where: { id },
+      data: { dueAt: dayjs().add(body.hours, "hour").toDate() }
     });
   });
 }

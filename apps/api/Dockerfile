@@ -13,4 +13,4 @@ RUN npx prisma generate --schema apps/api/prisma/schema.prisma
 RUN npm run build --workspace @japa/api
 
 EXPOSE 3333
-CMD ["npm", "run", "start", "--workspace", "@japa/api"]
+CMD ["sh", "-c", "npx prisma db push --schema apps/api/prisma/schema.prisma --skip-generate && npm run start --workspace @japa/api"]
