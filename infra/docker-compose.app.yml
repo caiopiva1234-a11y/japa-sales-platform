@@ -7,16 +7,15 @@ services:
       DATABASE_URL: postgresql://japa:japa@postgres:5432/japa_sales
       REDIS_URL: redis://redis:6379
       JWT_SECRET: trocar-esta-chave
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OLIST_API_BASE_URL: ${OLIST_API_BASE_URL}
-      OLIST_API_TOKEN: ${OLIST_API_TOKEN}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OLIST_API_BASE_URL: ${OLIST_API_BASE_URL:-}
+      OLIST_API_TOKEN: ${OLIST_API_TOKEN:-}
       EVOLUTION_API_URL: http://evolution-api:8080
-      EVOLUTION_API_TOKEN: ${EVOLUTION_API_TOKEN}
+      EVOLUTION_API_TOKEN: ${EVOLUTION_API_TOKEN:-}
       EVOLUTION_INSTANCE: JAPA_ATACADO
     depends_on:
       - postgres
       - redis
-      - evolution-api
     restart: unless-stopped
     ports:
       - "3333:3333"
@@ -61,8 +60,9 @@ services:
   evolution-api:
     image: atendai/evolution-api:latest
     restart: unless-stopped
+    profiles: ["whatsapp"]
     environment:
-      AUTHENTICATION_API_KEY: ${EVOLUTION_API_TOKEN}
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_TOKEN:-}
       DATABASE_ENABLED: "false"
       CACHE_REDIS_ENABLED: "false"
     ports:

@@ -167,3 +167,11 @@ model Lead {
   updatedAt        DateTime @updatedAt
   convertedCustomer Customer? @relation("ConvertedLead", fields: [convertedCustomerId], references: [id])
 }
+
+model IntegrationSetting {
+  id             String   @id @default(cuid())
+  key            String   @unique
+  valueEncrypted String
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+}

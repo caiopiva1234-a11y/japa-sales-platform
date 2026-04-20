@@ -48,6 +48,20 @@ Plataforma complementar ao OLIST ERP para apoiar vendas, retencao, captacao e at
 O projeto esta preparado para deploy em VPS (Hostinger) com Docker Compose.
 Tambem inclui CI/CD por GitHub Actions em `.github/workflows/deploy.yml`.
 
+### Evolution opcional (economia de servidor)
+
+- O servico `evolution-api` ficou em profile `whatsapp`.
+- Subida padrao (sem Evolution): `docker compose -f infra/docker-compose.app.yml up -d --build`
+- Subida com Evolution: `docker compose -f infra/docker-compose.app.yml --profile whatsapp up -d --build`
+
+### Teste de integracoes no frontend
+
+- Acesse `Configuracoes` em `/settings`
+- Salve chaves/tokens e use os botoes:
+  - `Testar OpenAI`
+  - `Testar OLIST`
+  - `Testar Evolution`
+
 ### CI/CD automatico (GitHub -> VPS)
 
 1. No GitHub do repositorio, crie o Environment `production` em `Settings -> Environments`.

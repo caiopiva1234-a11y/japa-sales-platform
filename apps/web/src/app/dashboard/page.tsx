@@ -140,6 +140,9 @@ export default function DashboardPage() {
       <header className="card">
         <h2>Painel Comercial - Japa Atacado</h2>
         <p>Recompra, atendimento e automacoes em uma unica plataforma.</p>
+        <p>
+          <a href="/settings">Ir para Configuracoes de Integracoes</a>
+        </p>
       </header>
 
       <section className="grid grid-3">
