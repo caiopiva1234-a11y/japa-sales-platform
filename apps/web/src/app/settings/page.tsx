@@ -17,7 +17,19 @@ type OlistSyncResponse = {
   message: string;
   retryAfterSeconds?: number;
   totalReceived?: number;
+  rawListCount?: number;
+  parsedOrders?: number;
   syncedOrders?: number;
+  skippedOutOfRangeOrders?: string[];
+  skippedInvalidDateOrders?: string[];
+  skippedMissingCustomer?: string[];
+  skippedOrders?: string[];
+  remote?: {
+    httpStatus: number;
+    topLevelKeys: string[];
+    chosenOrdersPath: string | null;
+    rawType: string;
+  };
 };
 
 export default function SettingsPage() {
@@ -68,6 +80,27 @@ export default function SettingsPage() {
     return `${date}T12:00:00.000Z`;
   }
 
+  function formatOlistSyncResult(result: OlistSyncResponse) {
+    if (result.retryAfterSeconds) return result.message;
+
+    const lista = result.rawListCount ?? result.totalReceived ?? 0;
+    const parseados = result.parsedOrders ?? result.totalReceived ?? 0;
+    const importados = result.syncedOrders ?? 0;
+    const fora = result.skippedOutOfRangeOrders?.length ?? 0;
+    const datasRuins = result.skippedInvalidDateOrders?.length ?? 0;
+    const semCliente = result.skippedMissingCustomer?.length ?? 0;
+    const erros = result.skippedOrders?.length ?? 0;
+
+    const remote = result.remote;
+    const remoteHint = remote
+      ? `HTTP ${remote.httpStatus} | lista=${remote.chosenOrdersPath ?? "nenhuma"} | tipo=${remote.rawType} | keys=${remote.topLevelKeys
+          .slice(0, 8)
+          .join(",")}${remote.topLevelKeys.length > 8 ? "..." : ""}`
+      : "";
+
+    return `${result.message} Lista bruta: ${lista}. Parseados: ${parseados}. Importados: ${importados}. Fora do periodo: ${fora}. Datas invalidas: ${datasRuins}. Sem cliente/id: ${semCliente}. Erros upsert: ${erros}.${remoteHint ? ` ${remoteHint}` : ""}`;
+  }
+
   async function importRange() {
     try {
       setImporting(true);
@@ -87,11 +120,7 @@ export default function SettingsPage() {
           mode: "window"
         })
       });
-      setMessage(
-        result.retryAfterSeconds
-          ? result.message
-          : `${result.message} Recebidos: ${result.totalReceived ?? 0}. Importados: ${result.syncedOrders ?? 0}.`
-      );
+      setMessage(formatOlistSyncResult(result));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Falha na importacao.");
     } finally {
@@ -106,11 +135,7 @@ export default function SettingsPage() {
         method: "POST",
         body: JSON.stringify({ months: importMonths, mode: "window" })
       });
-      setMessage(
-        result.retryAfterSeconds
-          ? result.message
-          : `${result.message} Recebidos: ${result.totalReceived ?? 0}. Importados: ${result.syncedOrders ?? 0}.`
-      );
+      setMessage(formatOlistSyncResult(result));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Falha na importacao.");
     } finally {
@@ -125,11 +150,7 @@ export default function SettingsPage() {
         method: "POST",
         body: JSON.stringify({ months: importMonths, mode: "since_last" })
       });
-      setMessage(
-        result.retryAfterSeconds
-          ? result.message
-          : `${result.message} Recebidos: ${result.totalReceived ?? 0}. Importados: ${result.syncedOrders ?? 0}.`
-      );
+      setMessage(formatOlistSyncResult(result));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Falha na importacao.");
     } finally {
