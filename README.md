@@ -50,14 +50,14 @@ Tambem inclui CI/CD por GitHub Actions em `.github/workflows/deploy.yml`.
 
 ### CI/CD automatico (GitHub -> VPS)
 
-1. No GitHub do repositorio, abra `Settings -> Secrets and variables -> Actions`.
-2. Crie os secrets:
+1. No GitHub do repositorio, crie o Environment `production` em `Settings -> Environments`.
+2. Dentro do environment `production`, adicione os secrets:
    - `VPS_HOST` (ex.: `72.60.195.240`)
    - `VPS_USER` (ex.: `root`)
    - `VPS_SSH_KEY` (conteudo da chave privada usada para acessar a VPS)
    - `VPS_APP_DIR` (ex.: `/opt/japa/japa-sales-platform`)
 3. Garanta que a chave publica correspondente esteja autorizada na VPS em `~/.ssh/authorized_keys`.
-4. A cada push na branch `main`, o workflow vai:
+4. A cada push na branch `main`, o workflow `Deploy VPS` (environment `production`) vai:
    - atualizar codigo com `git pull`
    - rebuildar containers com Docker Compose
    - aplicar schema Prisma (`db push`)
