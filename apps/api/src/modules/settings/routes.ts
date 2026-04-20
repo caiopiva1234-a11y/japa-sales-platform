@@ -170,6 +170,25 @@ export async function settingsRoutes(app: FastifyInstance) {
         if (code === "ERR_INVALID_URL") {
           return { ok: false, provider, message: "OLIST URL invalida (nao foi possivel montar a URL absoluta)." };
         }
+        if (axios.isAxiosError(error)) {
+          const status = error.response?.status;
+          if (status === 404) {
+            return {
+              ok: false,
+              provider,
+              message:
+                "OLIST: rota nao encontrada (404). Confirme a base da API v3 da Tiny: https://api.tiny.com.br/public-api/v3 (nao use so o dominio sem /public-api/v3)."
+            };
+          }
+          if (status === 401) {
+            return {
+              ok: false,
+              provider,
+              message:
+                "OLIST: nao autorizado (401). Na API v3 o campo de token deve ser um Bearer valido (access token do aplicativo OAuth), nao apenas o Client Secret."
+            };
+          }
+        }
         throw error;
       }
       return { ok: true, provider, message: "Conexao com OLIST validada com sucesso." };
