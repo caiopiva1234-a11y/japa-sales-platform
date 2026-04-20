@@ -7,6 +7,9 @@ type IntegrationSettings = {
   openaiApiKey: string;
   olistApiBaseUrl: string;
   olistApiToken: string;
+  olistTinyClientId: string;
+  olistTinyClientSecret: string;
+  olistTinyRefreshToken: string;
   evolutionApiToken: string;
   olistAutoSyncEnabled: boolean;
   olistAutoSyncIntervalMinutes: number;
@@ -37,6 +40,9 @@ export default function SettingsPage() {
     openaiApiKey: "",
     olistApiBaseUrl: "",
     olistApiToken: "",
+    olistTinyClientId: "",
+    olistTinyClientSecret: "",
+    olistTinyRefreshToken: "",
     evolutionApiToken: "",
     olistAutoSyncEnabled: false,
     olistAutoSyncIntervalMinutes: 120,
@@ -58,6 +64,9 @@ export default function SettingsPage() {
       const data = await apiFetch<IntegrationSettings>("/settings/integrations");
       setForm({
         ...data,
+        olistTinyClientId: data.olistTinyClientId ?? "",
+        olistTinyClientSecret: data.olistTinyClientSecret ?? "",
+        olistTinyRefreshToken: data.olistTinyRefreshToken ?? "",
         olistAutoSyncEnabled: Boolean(data.olistAutoSyncEnabled),
         olistAutoSyncIntervalMinutes: Number(data.olistAutoSyncIntervalMinutes ?? 120),
         olistMinManualIntervalMinutes: Number(data.olistMinManualIntervalMinutes ?? 10)
@@ -210,13 +219,52 @@ export default function SettingsPage() {
             placeholder="https://api.tiny.com.br/public-api/v3"
           />
         </label>
+        <p className="muted" style={{ margin: 0 }}>
+          OAuth Tiny (recomendado): crie um aplicativo no ERP, depois use Client ID, Client Secret e o Refresh
+          Token obtidos apos o login/autorizacao. Guia oficial:{" "}
+          <a href="https://api-docs.erp.olist.com/documentacao/comecando/autenticacao" target="_blank" rel="noreferrer">
+            Autenticacao API v3
+          </a>
+          .
+        </p>
         <label>
-          OLIST/Tiny API Token
+          OLIST/Tiny Client ID
+          <input
+            className="input"
+            value={form.olistTinyClientId}
+            onChange={(event) => setForm((prev) => ({ ...prev, olistTinyClientId: event.target.value }))}
+            placeholder="Client ID do aplicativo"
+          />
+        </label>
+        <label>
+          OLIST/Tiny Client Secret
+          <input
+            className="input"
+            type="password"
+            autoComplete="new-password"
+            value={form.olistTinyClientSecret}
+            onChange={(event) => setForm((prev) => ({ ...prev, olistTinyClientSecret: event.target.value }))}
+            placeholder="Client Secret"
+          />
+        </label>
+        <label>
+          OLIST/Tiny Refresh Token
+          <input
+            className="input"
+            type="password"
+            autoComplete="new-password"
+            value={form.olistTinyRefreshToken}
+            onChange={(event) => setForm((prev) => ({ ...prev, olistTinyRefreshToken: event.target.value }))}
+            placeholder="Refresh token (OAuth)"
+          />
+        </label>
+        <label>
+          OLIST/Tiny API Token (opcional)
           <input
             className="input"
             value={form.olistApiToken}
             onChange={(event) => setForm((prev) => ({ ...prev, olistApiToken: event.target.value }))}
-            placeholder="Token OLIST"
+            placeholder="Access token Bearer (se nao usar OAuth acima)"
           />
           <button
             className="btn"

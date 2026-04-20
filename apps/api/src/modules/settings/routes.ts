@@ -13,11 +13,15 @@ import {
   normalizeOlistBaseUrl,
   OLIST_TINY_V3_ORDERS_LIST_PATH
 } from "../integrations/olist/olistUrl.js";
+import { resolveOlistBearerAccessToken } from "../integrations/olist/olistTinyToken.js";
 
 const upsertSettingsSchema = z.object({
   openaiApiKey: z.string().optional(),
   olistApiBaseUrl: z.string().optional(),
   olistApiToken: z.string().optional(),
+  olistTinyClientId: z.string().optional(),
+  olistTinyClientSecret: z.string().optional(),
+  olistTinyRefreshToken: z.string().optional(),
   evolutionApiToken: z.string().optional(),
   olistAutoSyncEnabled: z.boolean().optional(),
   olistAutoSyncIntervalMinutes: z.coerce.number().int().min(15).max(24 * 60).optional(),
@@ -31,6 +35,11 @@ const testSettingsSchema = z.object({
 function maskValue(raw: string) {
   if (raw.length <= 4) return "****";
   return `${"*".repeat(Math.max(4, raw.length - 4))}${raw.slice(-4)}`;
+}
+
+/** Evita salvar de novo o valor mascarado que o GET devolve (ex.: ********abcd). */
+function isMaskedPlaceholder(value: string) {
+  return value.trim().startsWith("*");
 }
 
 export async function settingsRoutes(app: FastifyInstance) {
@@ -66,6 +75,9 @@ export async function settingsRoutes(app: FastifyInstance) {
       openaiApiKey: readMasked(INTEGRATION_SETTING_KEYS.openaiApiKey),
       olistApiBaseUrl: await readPlain(INTEGRATION_SETTING_KEYS.olistApiBaseUrl),
       olistApiToken: readMasked(INTEGRATION_SETTING_KEYS.olistApiToken),
+      olistTinyClientId: await readPlain(INTEGRATION_SETTING_KEYS.olistTinyClientId),
+      olistTinyClientSecret: readMasked(INTEGRATION_SETTING_KEYS.olistTinyClientSecret),
+      olistTinyRefreshToken: readMasked(INTEGRATION_SETTING_KEYS.olistTinyRefreshToken),
       evolutionApiToken: readMasked(INTEGRATION_SETTING_KEYS.evolutionApiToken),
       olistAutoSyncEnabled: (await readPlain(INTEGRATION_SETTING_KEYS.olistAutoSyncEnabled)) === "true",
       olistAutoSyncIntervalMinutes: parseNumber(
@@ -86,7 +98,9 @@ export async function settingsRoutes(app: FastifyInstance) {
     const body = upsertSettingsSchema.parse(request.body);
     const entries: Array<[keyof typeof INTEGRATION_SETTING_KEYS, string]> = [];
 
-    if (body.openaiApiKey?.trim()) entries.push(["openaiApiKey", body.openaiApiKey.trim()]);
+    if (body.openaiApiKey?.trim() && !isMaskedPlaceholder(body.openaiApiKey)) {
+      entries.push(["openaiApiKey", body.openaiApiKey.trim()]);
+    }
     if (body.olistApiBaseUrl?.trim()) {
       const normalized = normalizeOlistBaseUrl(body.olistApiBaseUrl);
       if (!normalized.ok) {
@@ -94,8 +108,19 @@ export async function settingsRoutes(app: FastifyInstance) {
       }
       entries.push(["olistApiBaseUrl", normalized.baseUrl]);
     }
-    if (body.olistApiToken?.trim()) entries.push(["olistApiToken", body.olistApiToken.trim()]);
-    if (body.evolutionApiToken?.trim()) entries.push(["evolutionApiToken", body.evolutionApiToken.trim()]);
+    if (body.olistApiToken?.trim() && !isMaskedPlaceholder(body.olistApiToken)) {
+      entries.push(["olistApiToken", body.olistApiToken.trim()]);
+    }
+    if (body.olistTinyClientId?.trim()) entries.push(["olistTinyClientId", body.olistTinyClientId.trim()]);
+    if (body.olistTinyClientSecret?.trim() && !isMaskedPlaceholder(body.olistTinyClientSecret)) {
+      entries.push(["olistTinyClientSecret", body.olistTinyClientSecret.trim()]);
+    }
+    if (body.olistTinyRefreshToken?.trim() && !isMaskedPlaceholder(body.olistTinyRefreshToken)) {
+      entries.push(["olistTinyRefreshToken", body.olistTinyRefreshToken.trim()]);
+    }
+    if (body.evolutionApiToken?.trim() && !isMaskedPlaceholder(body.evolutionApiToken)) {
+      entries.push(["evolutionApiToken", body.evolutionApiToken.trim()]);
+    }
 
     if (body.olistAutoSyncEnabled !== undefined) {
       entries.push(["olistAutoSyncEnabled", body.olistAutoSyncEnabled ? "true" : "false"]);
@@ -147,12 +172,13 @@ export async function settingsRoutes(app: FastifyInstance) {
         (await readDecryptedIntegrationSetting(INTEGRATION_SETTING_KEYS.olistApiBaseUrl)) ||
         env.OLIST_API_BASE_URL ||
         "";
-      const apiToken =
-        (await readDecryptedIntegrationSetting(INTEGRATION_SETTING_KEYS.olistApiToken)) ||
-        env.OLIST_API_TOKEN ||
-        "";
-      if (!baseUrlRaw || !apiToken) {
-        return { ok: false, provider, message: "OLIST URL e token sao obrigatorios." };
+      const resolved = await resolveOlistBearerAccessToken({ forceRefresh: true });
+      if ("error" in resolved) {
+        return { ok: false, provider, message: resolved.error };
+      }
+
+      if (!baseUrlRaw) {
+        return { ok: false, provider, message: "OLIST URL e obrigatoria." };
       }
 
       const normalized = normalizeOlistBaseUrl(baseUrlRaw);
@@ -162,7 +188,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 
       try {
         await axios.get(`${normalized.baseUrl}${OLIST_TINY_V3_ORDERS_LIST_PATH}`, {
-          headers: { Authorization: `Bearer ${apiToken}` },
+          headers: { Authorization: `Bearer ${resolved.accessToken}` },
           timeout: 10000
         });
       } catch (error) {
@@ -185,7 +211,7 @@ export async function settingsRoutes(app: FastifyInstance) {
               ok: false,
               provider,
               message:
-                "OLIST: nao autorizado (401). Na API v3 o campo de token deve ser um Bearer valido (access token do aplicativo OAuth), nao apenas o Client Secret."
+                "OLIST: nao autorizado (401). Confira Client ID, Client Secret e Refresh Token (OAuth Tiny), ou um access token valido em OLIST API Token. Guia: https://api-docs.erp.olist.com/documentacao/comecando/autenticacao"
             };
           }
         }

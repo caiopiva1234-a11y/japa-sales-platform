@@ -7,6 +7,7 @@ import {
 } from "../integrationCredentials.js";
 import { assertOlistRemoteCallAllowed, runOlistOrderSync } from "./olistSyncService.js";
 import { normalizeOlistBaseUrl, OLIST_TINY_V3_ORDERS_LIST_PATH } from "./olistUrl.js";
+import { resolveOlistBearerAccessToken } from "./olistTinyToken.js";
 
 const syncBodySchema = z
   .object({
@@ -33,13 +34,14 @@ export async function olistRoutes(app: FastifyInstance) {
       (await readDecryptedIntegrationSetting(INTEGRATION_SETTING_KEYS.olistApiBaseUrl)) ||
       env.OLIST_API_BASE_URL ||
       "";
-    const apiToken =
-      (await readDecryptedIntegrationSetting(INTEGRATION_SETTING_KEYS.olistApiToken)) ||
-      env.OLIST_API_TOKEN ||
-      "";
+    const resolvedBearer = await resolveOlistBearerAccessToken();
+    if ("error" in resolvedBearer) {
+      return { message: resolvedBearer.error };
+    }
+    const apiToken = resolvedBearer.accessToken;
 
-    if (!baseUrl || !apiToken) {
-      return { message: "Configure OLIST_API_BASE_URL e OLIST_API_TOKEN (ou salve em /settings)." };
+    if (!baseUrl) {
+      return { message: "Configure OLIST_API_BASE_URL (ou salve em /settings)." };
     }
 
     const normalizedBase = normalizeOlistBaseUrl(baseUrl);

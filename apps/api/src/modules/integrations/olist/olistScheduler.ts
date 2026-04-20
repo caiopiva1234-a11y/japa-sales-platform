@@ -5,6 +5,7 @@ import {
   readDecryptedIntegrationSetting
 } from "../integrationCredentials.js";
 import { assertOlistRemoteCallAllowed, readNumberSetting, runOlistOrderSync } from "./olistSyncService.js";
+import { resolveOlistBearerAccessToken } from "./olistTinyToken.js";
 
 let schedulerStarted = false;
 let lastAutoAttemptAtMs = 0;
@@ -36,12 +37,11 @@ async function tick(app: FastifyInstance) {
       (await readDecryptedIntegrationSetting(INTEGRATION_SETTING_KEYS.olistApiBaseUrl)) ||
       env.OLIST_API_BASE_URL ||
       "";
-    const apiToken =
-      (await readDecryptedIntegrationSetting(INTEGRATION_SETTING_KEYS.olistApiToken)) ||
-      env.OLIST_API_TOKEN ||
-      "";
+    const resolvedBearer = await resolveOlistBearerAccessToken();
+    if ("error" in resolvedBearer) return;
+    const apiToken = resolvedBearer.accessToken;
 
-    if (!baseUrl || !apiToken) return;
+    if (!baseUrl) return;
 
     const gate = await assertOlistRemoteCallAllowed();
     if (!gate.ok) {

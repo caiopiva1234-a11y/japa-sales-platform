@@ -4,6 +4,9 @@ import { decryptSecret } from "../../shared/crypto.js";
 export const INTEGRATION_SETTING_KEYS = {
   olistApiBaseUrl: "OLIST_API_BASE_URL",
   olistApiToken: "OLIST_API_TOKEN",
+  olistTinyClientId: "OLIST_TINY_CLIENT_ID",
+  olistTinyClientSecret: "OLIST_TINY_CLIENT_SECRET",
+  olistTinyRefreshToken: "OLIST_TINY_REFRESH_TOKEN",
   evolutionApiToken: "EVOLUTION_API_TOKEN",
   openaiApiKey: "OPENAI_API_KEY",
   olistAutoSyncEnabled: "OLIST_AUTO_SYNC_ENABLED",
