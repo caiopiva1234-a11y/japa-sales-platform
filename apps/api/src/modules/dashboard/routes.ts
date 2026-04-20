@@ -44,7 +44,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
       prisma.conversationAnalysis.findMany()
     ]);
 
-    const byLane = tasks.reduce<Record<string, number>>((acc, task) => {
+    const byLane = tasks.reduce((acc: Record<string, number>, task) => {
       acc[task.lane] = (acc[task.lane] ?? 0) + 1;
       return acc;
     }, {});

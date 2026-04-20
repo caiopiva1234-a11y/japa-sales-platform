@@ -45,10 +45,10 @@ export async function settingsRoutes(app: FastifyInstance) {
     if (token.role !== "admin") return { message: "Apenas admin pode acessar configuracoes." };
 
     const settings = await prisma.integrationSetting.findMany();
-    const map = new Map(settings.map((item) => [item.key, item.valueEncrypted]));
+    const map = new Map<string, string>(settings.map((item) => [item.key, item.valueEncrypted]));
 
     const readMasked = (key: string) => {
-      const valueEncrypted = map.get(key);
+      const valueEncrypted = map.get(key) as string | undefined;
       if (!valueEncrypted) return "";
       try {
         return maskValue(decryptSecret(valueEncrypted));
