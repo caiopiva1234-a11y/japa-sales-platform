@@ -16,7 +16,17 @@ export async function leadRoutes(app: FastifyInstance) {
 
   app.post("/leads", async (request) => {
     await request.jwtVerify();
-    const body = leadSchema.parse(request.body);
-    return prisma.lead.create({ data: body });
+    const body = leadSchema.parse(request.body) as {
+      name: string;
+      phone?: string;
+      source?: string;
+    };
+    return prisma.lead.create({
+      data: {
+        name: body.name,
+        phone: body.phone,
+        source: body.source ?? "manual"
+      }
+    });
   });
 }

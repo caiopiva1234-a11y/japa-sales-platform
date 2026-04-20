@@ -20,7 +20,19 @@ export async function clientRoutes(app: FastifyInstance) {
 
   app.post("/customers", async (request) => {
     await request.jwtVerify();
-    const body = createCustomerSchema.parse(request.body);
-    return prisma.customer.create({ data: body });
+    const body = createCustomerSchema.parse(request.body) as {
+      name: string;
+      phone?: string;
+      city?: string;
+      segment?: string;
+    };
+    return prisma.customer.create({
+      data: {
+        name: body.name,
+        phone: body.phone,
+        city: body.city,
+        segment: body.segment
+      }
+    });
   });
 }
