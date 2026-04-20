@@ -6,6 +6,7 @@ import {
   readDecryptedIntegrationSetting
 } from "../integrationCredentials.js";
 import { assertOlistRemoteCallAllowed, runOlistOrderSync } from "./olistSyncService.js";
+import { normalizeOlistBaseUrl } from "./olistUrl.js";
 
 const syncBodySchema = z
   .object({
@@ -39,6 +40,11 @@ export async function olistRoutes(app: FastifyInstance) {
 
     if (!baseUrl || !apiToken) {
       return { message: "Configure OLIST_API_BASE_URL e OLIST_API_TOKEN (ou salve em /settings)." };
+    }
+
+    const normalizedBase = normalizeOlistBaseUrl(baseUrl);
+    if (!normalizedBase.ok) {
+      return { message: `OLIST URL invalida: ${normalizedBase.message}` };
     }
 
     const gate = await assertOlistRemoteCallAllowed();
@@ -83,15 +89,24 @@ export async function olistRoutes(app: FastifyInstance) {
         })();
     }
 
-    const result = await runOlistOrderSync({ baseUrl, apiToken, cutoff, until });
+    try {
+      const result = await runOlistOrderSync({ baseUrl: normalizedBase.baseUrl, apiToken, cutoff, until });
 
-    return {
-      ...result,
-      syncWindow: {
-        ...result.syncWindow,
-        months: explicitSince ? null : months,
-        mode
+      return {
+        ...result,
+        syncWindow: {
+          ...result.syncWindow,
+          months: explicitSince ? null : months,
+          mode
+        }
+      };
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === "ERR_INVALID_URL") {
+        return { message: "OLIST URL invalida (nao foi possivel montar a URL absoluta para /orders)." };
       }
-    };
+      const msg = error instanceof Error ? error.message : "Erro desconhecido na sincronizacao.";
+      return { message: msg };
+    }
   });
 }

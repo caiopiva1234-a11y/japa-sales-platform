@@ -9,6 +9,7 @@ import {
   INTEGRATION_SETTING_KEYS,
   readDecryptedIntegrationSetting
 } from "../integrations/integrationCredentials.js";
+import { normalizeOlistBaseUrl } from "../integrations/olist/olistUrl.js";
 
 const upsertSettingsSchema = z.object({
   openaiApiKey: z.string().optional(),
@@ -83,7 +84,13 @@ export async function settingsRoutes(app: FastifyInstance) {
     const entries: Array<[keyof typeof INTEGRATION_SETTING_KEYS, string]> = [];
 
     if (body.openaiApiKey?.trim()) entries.push(["openaiApiKey", body.openaiApiKey.trim()]);
-    if (body.olistApiBaseUrl?.trim()) entries.push(["olistApiBaseUrl", body.olistApiBaseUrl.trim()]);
+    if (body.olistApiBaseUrl?.trim()) {
+      const normalized = normalizeOlistBaseUrl(body.olistApiBaseUrl);
+      if (!normalized.ok) {
+        return { message: `OLIST URL invalida: ${normalized.message}` };
+      }
+      entries.push(["olistApiBaseUrl", normalized.baseUrl]);
+    }
     if (body.olistApiToken?.trim()) entries.push(["olistApiToken", body.olistApiToken.trim()]);
     if (body.evolutionApiToken?.trim()) entries.push(["evolutionApiToken", body.evolutionApiToken.trim()]);
 
@@ -133,7 +140,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
 
     if (provider === "olist") {
-      const baseUrl =
+      const baseUrlRaw =
         (await readDecryptedIntegrationSetting(INTEGRATION_SETTING_KEYS.olistApiBaseUrl)) ||
         env.OLIST_API_BASE_URL ||
         "";
@@ -141,13 +148,27 @@ export async function settingsRoutes(app: FastifyInstance) {
         (await readDecryptedIntegrationSetting(INTEGRATION_SETTING_KEYS.olistApiToken)) ||
         env.OLIST_API_TOKEN ||
         "";
-      if (!baseUrl || !apiToken) {
+      if (!baseUrlRaw || !apiToken) {
         return { ok: false, provider, message: "OLIST URL e token sao obrigatorios." };
       }
-      await axios.get(`${baseUrl}/orders`, {
-        headers: { Authorization: `Bearer ${apiToken}` },
-        timeout: 10000
-      });
+
+      const normalized = normalizeOlistBaseUrl(baseUrlRaw);
+      if (!normalized.ok) {
+        return { ok: false, provider, message: `OLIST URL invalida: ${normalized.message}` };
+      }
+
+      try {
+        await axios.get(`${normalized.baseUrl}/orders`, {
+          headers: { Authorization: `Bearer ${apiToken}` },
+          timeout: 10000
+        });
+      } catch (error) {
+        const code = (error as { code?: string }).code;
+        if (code === "ERR_INVALID_URL") {
+          return { ok: false, provider, message: "OLIST URL invalida (nao foi possivel montar a URL absoluta)." };
+        }
+        throw error;
+      }
       return { ok: true, provider, message: "Conexao com OLIST validada com sucesso." };
     }
 

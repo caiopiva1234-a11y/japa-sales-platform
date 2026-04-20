@@ -5,6 +5,7 @@ import {
   readDecryptedIntegrationSetting
 } from "../integrationCredentials.js";
 import { encryptSecret } from "../../../shared/crypto.js";
+import { normalizeOlistBaseUrl } from "./olistUrl.js";
 
 type OlistOrder = {
   id: string;
@@ -170,7 +171,12 @@ function normalizeRemoteOrder(raw: RemoteOrder): OlistOrder | null {
 }
 
 export async function runOlistOrderSync(params: OlistSyncParams): Promise<OlistSyncResult> {
-  const response = await axios.get<unknown>(`${params.baseUrl}/orders`, {
+  const normalizedBase = normalizeOlistBaseUrl(params.baseUrl);
+  if (!normalizedBase.ok) {
+    throw new Error(`OLIST URL invalida: ${normalizedBase.message}`);
+  }
+
+  const response = await axios.get<unknown>(`${normalizedBase.baseUrl}/orders`, {
     headers: { Authorization: `Bearer ${params.apiToken}` },
     timeout: 120000
   });
