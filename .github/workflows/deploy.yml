@@ -1,0 +1,29 @@
+name: Deploy VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy on VPS over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script_stop: true
+          script: |
+            set -e
+            cd "${{ secrets.VPS_APP_DIR }}"
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+            docker compose -f infra/docker-compose.app.yml up -d --build
+            docker compose -f infra/docker-compose.app.yml exec -T api npx prisma db push --schema apps/api/prisma/schema.prisma
+            docker compose -f infra/docker-compose.app.yml ps

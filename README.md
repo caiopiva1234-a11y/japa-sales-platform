@@ -46,4 +46,18 @@ Plataforma complementar ao OLIST ERP para apoiar vendas, retencao, captacao e at
 ## Deploy
 
 O projeto esta preparado para deploy em VPS (Hostinger) com Docker Compose.
-No proximo passo podemos criar os arquivos de deploy automatizado e o passo a passo guiado.
+Tambem inclui CI/CD por GitHub Actions em `.github/workflows/deploy.yml`.
+
+### CI/CD automatico (GitHub -> VPS)
+
+1. No GitHub do repositorio, abra `Settings -> Secrets and variables -> Actions`.
+2. Crie os secrets:
+   - `VPS_HOST` (ex.: `72.60.195.240`)
+   - `VPS_USER` (ex.: `root`)
+   - `VPS_SSH_KEY` (conteudo da chave privada usada para acessar a VPS)
+   - `VPS_APP_DIR` (ex.: `/opt/japa/japa-sales-platform`)
+3. Garanta que a chave publica correspondente esteja autorizada na VPS em `~/.ssh/authorized_keys`.
+4. A cada push na branch `main`, o workflow vai:
+   - atualizar codigo com `git pull`
+   - rebuildar containers com Docker Compose
+   - aplicar schema Prisma (`db push`)
